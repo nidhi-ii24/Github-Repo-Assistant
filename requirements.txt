@@ -1,0 +1,35 @@
+# Core
+requests>=2.31.0
+numpy>=1.26.0
+python-dotenv>=1.0.0
+
+# Local embeddings (free)
+sentence-transformers>=2.6.0
+
+# Demo 1 — vector store
+faiss-cpu>=1.7.4
+
+# Chat / Agent — Groq
+groq>=0.9.0
+
+# LangChain (COMPATIBLE with your code)
+langchain==0.1.20
+langchain-community==0.0.38
+
+# Needed for embeddings + Groq integration
+langchain-huggingface==0.0.3
+langchain-groq==0.1.3
+
+# Agent prompt hub
+langchainhub>=0.1.15
+
+# Vector store
+chromadb>=0.4.24
+
+# HuggingFace backend
+huggingface-hub>=0.23.0
+
+# Web server (for server.py + index.html frontend)
+fastapi>=0.111.0
+uvicorn>=0.29.0
+sse-starlette>=1.8.0

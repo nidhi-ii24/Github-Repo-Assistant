@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GitHub Repo Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:         #0a0c10;
+    --surface:    #111318;
+    --border:     #1e2130;
+    --border-hi:  #2e3350;
+    --text:       #c8cdd8;
+    --text-dim:   #5a6070;
+    --text-bright:#e8ecf5;
+    --accent:     #4f8ef7;
+    --accent-glow:rgba(79,142,247,0.15);
+    --green:      #3dd68c;
+    --green-dim:  rgba(61,214,140,0.12);
+    --amber:      #f5a623;
+    --amber-dim:  rgba(245,166,35,0.1);
+    --red:        #ff5f5f;
+    --user-bg:    #141924;
+    --bot-bg:     #0f1118;
+    --log-bg:     #0c0f14;
+    --radius:     10px;
+    --mono:       'JetBrains Mono', monospace;
+    --sans:       'Syne', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Top bar ── */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .logo {
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--text-bright);
+    letter-spacing: -0.3px;
+    white-space: nowrap;
+  }
+
+  .logo span { color: var(--accent); }
+
+  .demo-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border-hi);
+    color: var(--text-dim);
+    transition: all 0.3s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 500px;
+  }
+
+  .demo-badge.loaded {
+    color: var(--green);
+    border-color: var(--green);
+    background: var(--green-dim);
+  }
+
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  .status-dot.live { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+  .status-dot.busy { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+  .status-dot.err  { background: var(--red); }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; } 50% { opacity: 0.5; }
+  }
+
+  /* ── Main layout ── */
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Chat pane ── */
+  .chat-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid var(--border);
+  }
+
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    scroll-behavior: smooth;
+  }
+
+  .messages::-webkit-scrollbar { width: 4px; }
+  .messages::-webkit-scrollbar-track { background: transparent; }
+  .messages::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 2px; }
+
+  .msg {
+    display: flex;
+    gap: 12px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+    animation: fadeIn 0.2s ease;
+  }
+
+  .msg:last-child { border-bottom: none; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg-icon {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .msg.user .msg-icon  { background: var(--user-bg); border: 1px solid var(--border-hi); color: var(--accent); }
+  .msg.bot .msg-icon   { background: var(--green-dim); border: 1px solid var(--green); color: var(--green); }
+  .msg.sys .msg-icon   { background: var(--amber-dim); border: 1px solid var(--amber); color: var(--amber); }
+
+  .msg-body { flex: 1; min-width: 0; }
+
+  .msg-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 5px;
+  }
+
+  .msg.user .msg-label { color: var(--accent); }
+  .msg.bot  .msg-label { color: var(--green); }
+  .msg.sys  .msg-label { color: var(--amber); }
+
+  .msg-text {
+    color: var(--text);
+    line-height: 1.65;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .msg.user .msg-text { color: var(--text-bright); }
+
+  /* Code blocks in answers */
+  .msg-text code {
+    background: var(--log-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+  }
+
+  .msg-text pre {
+    background: var(--log-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+    overflow-x: auto;
+    margin-top: 8px;
+  }
+
+  .msg-text pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--text);
+  }
+
+  /* Log lines inside a message */
+  .log-lines {
+    margin-top: 8px;
+    background: var(--log-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .log-line {
+    font-size: 11px;
+    color: var(--text-dim);
+    white-space: pre-wrap;
+    animation: fadeIn 0.15s ease;
+  }
+
+  /* Typing indicator */
+  .typing {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    padding: 6px 0;
+  }
+  .typing span {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    animation: blink 1.2s infinite;
+  }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%,80%,100% { opacity: 0.3; } 40% { opacity: 1; } }
+
+  /* ── Input area ── */
+  .input-area {
+    padding: 14px 20px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-shrink: 0;
+  }
+
+  textarea {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border-hi);
+    border-radius: var(--radius);
+    color: var(--text-bright);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 10px 14px;
+    resize: none;
+    outline: none;
+    line-height: 1.5;
+    min-height: 42px;
+    max-height: 120px;
+    transition: border-color 0.2s;
+  }
+
+  textarea:focus { border-color: var(--accent); }
+  textarea::placeholder { color: var(--text-dim); }
+
+  button.send {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    padding: 10px 18px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    white-space: nowrap;
+    height: 42px;
+  }
+
+  button.send:hover:not(:disabled) { opacity: 0.85; }
+  button.send:active:not(:disabled) { transform: scale(0.97); }
+  button.send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    overflow-y: auto;
+  }
+
+  .sidebar::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--border-hi); }
+
+  .sidebar-section {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-title {
+    font-family: var(--sans);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+
+  .tip-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 8px 10px;
+    cursor: pointer;
+    margin-bottom: 6px;
+    transition: border-color 0.2s, color 0.2s;
+    line-height: 1.4;
+  }
+
+  .tip-btn:hover { border-color: var(--accent); color: var(--text-bright); }
+  .tip-btn:last-child { margin-bottom: 0; }
+
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    padding: 4px 0;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+  }
+  .info-row:last-child { border-bottom: none; }
+  .info-row .val { color: var(--text); font-weight: 500; }
+
+  .clear-btn {
+    width: 100%;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 7px;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .clear-btn:hover { border-color: var(--red); color: var(--red); }
+
+  /* ── Welcome message ── */
+  .welcome {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 10px;
+    opacity: 0.4;
+    pointer-events: none;
+    user-select: none;
+  }
+  .welcome-icon { font-size: 36px; }
+  .welcome-text { font-family: var(--sans); font-size: 15px; font-weight: 700; color: var(--text-bright); }
+  .welcome-sub  { font-size: 11px; color: var(--text-dim); text-align: center; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">⚡ Repo<span>Assistant</span></div>
+  <div class="demo-badge" id="demoBadge">Connecting to server…</div>
+  <div style="flex:1"></div>
+  <div class="status-dot" id="statusDot"></div>
+</header>
+
+<div class="main">
+  <!-- Chat pane -->
+  <div class="chat-pane">
+    <div class="messages" id="messages">
+      <div class="welcome" id="welcome">
+        <div class="welcome-icon">🤖</div>
+        <div class="welcome-text">GitHub Repo Assistant</div>
+        <div class="welcome-sub">Ask anything about FastAPI.<br>Try a suggestion from the sidebar →</div>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <textarea
+        id="input"
+        placeholder="Ask a question about FastAPI…"
+        rows="1"
+        onkeydown="handleKey(event)"
+        oninput="autoResize(this)"
+      ></textarea>
+      <button class="send" id="sendBtn" onclick="sendMessage()">Send ↵</button>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">Stack</div>
+      <div id="stackInfo">
+        <div class="info-row"><span>Status</span><span class="val" id="siStatus">—</span></div>
+        <div class="info-row"><span>Demo</span><span class="val" id="siDemo">—</span></div>
+        <div class="info-row"><span>Embeddings</span><span class="val">local CPU</span></div>
+        <div class="info-row"><span>Chat</span><span class="val">Groq / Llama</span></div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Try These</div>
+      <div id="tips">
+        <div class="tip-btn" style="opacity:0.4">Loading tips…</div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Session</div>
+      <div class="info-row"><span>Messages</span><span class="val" id="siMsgs">0</span></div>
+      <div class="info-row"><span>Queries sent</span><span class="val" id="siQueries">0</span></div>
+    </div>
+
+    <div class="sidebar-section">
+      <button class="clear-btn" onclick="clearChat()">🗑 Clear chat</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SERVER = "http://localhost:8000";
+let msgCount   = 0;
+let queryCount = 0;
+let busy       = false;
+
+// ── Connect to server on load ─────────────────────────────────────────────────
+async function init() {
+  const dot   = document.getElementById("statusDot");
+  const badge = document.getElementById("demoBadge");
+  try {
+    const res  = await fetch(`${SERVER}/info`);
+    const info = await res.json();
+
+    badge.textContent = info.label;
+    badge.classList.add("loaded");
+    dot.className = "status-dot live";
+
+    document.getElementById("siStatus").textContent = "Connected";
+    document.getElementById("siDemo").textContent   = `Demo ${info.demo}`;
+
+    // Populate tips
+    const tipsEl = document.getElementById("tips");
+    tipsEl.innerHTML = "";
+    info.tips.forEach(tip => {
+      const btn = document.createElement("button");
+      btn.className   = "tip-btn";
+      btn.textContent = tip;
+      btn.onclick     = () => { document.getElementById("input").value = tip; sendMessage(); };
+      tipsEl.appendChild(btn);
+    });
+
+  } catch (e) {
+    badge.textContent = "⚠ Cannot reach server — is server.py running?";
+    dot.className     = "status-dot err";
+    document.getElementById("siStatus").textContent = "Offline";
+    addMessage("sys", "System", `Cannot connect to ${SERVER}.\n\nMake sure you ran:\n  python server.py`);
+  }
+}
+
+// ── Add a message bubble ──────────────────────────────────────────────────────
+function addMessage(type, label, text, logLines) {
+  const welcome = document.getElementById("welcome");
+  if (welcome) welcome.remove();
+
+  const icons = { user: "👤", bot: "🤖", sys: "⚡" };
+  const el = document.createElement("div");
+  el.className = `msg ${type}`;
+  el.id        = `msg-${++msgCount}`;
+
+  let logsHtml = "";
+  if (logLines && logLines.length) {
+    logsHtml = `<div class="log-lines">${
+      logLines.map(l => `<div class="log-line">${escHtml(l)}</div>`).join("")
+    }</div>`;
+  }
+
+  el.innerHTML = `
+    <div class="msg-icon">${icons[type] || "?"}</div>
+    <div class="msg-body">
+      <div class="msg-label">${label}</div>
+      <div class="msg-text" id="text-${msgCount}">${renderText(text)}</div>
+      ${logsHtml}
+    </div>
+  `;
+  document.getElementById("messages").appendChild(el);
+  el.scrollIntoView({ behavior: "smooth", block: "end" });
+  document.getElementById("siMsgs").textContent = msgCount;
+  return el;
+}
+
+// Start an empty bot message that we'll fill in via SSE
+function startBotMessage() {
+  const welcome = document.getElementById("welcome");
+  if (welcome) welcome.remove();
+
+  const el = document.createElement("div");
+  el.className = `msg bot`;
+  el.id        = `msg-${++msgCount}`;
+  el.innerHTML = `
+    <div class="msg-icon">🤖</div>
+    <div class="msg-body">
+      <div class="msg-label">Assistant</div>
+      <div class="msg-text" id="text-${msgCount}">
+        <div class="typing"><span></span><span></span><span></span></div>
+      </div>
+      <div class="log-lines" id="logs-${msgCount}" style="display:none"></div>
+    </div>
+  `;
+  document.getElementById("messages").appendChild(el);
+  el.scrollIntoView({ behavior: "smooth", block: "end" });
+  document.getElementById("siMsgs").textContent = msgCount;
+  return msgCount;   // return id to update later
+}
+
+function appendLog(msgId, line) {
+  const logsEl = document.getElementById(`logs-${msgId}`);
+  logsEl.style.display = "flex";
+  const d = document.createElement("div");
+  d.className   = "log-line";
+  d.textContent = line;
+  logsEl.appendChild(d);
+  logsEl.closest(".msg").scrollIntoView({ behavior: "smooth", block: "end" });
+}
+
+function setAnswer(msgId, text) {
+  const el = document.getElementById(`text-${msgId}`);
+  el.innerHTML = renderText(text);
+  el.closest(".msg").scrollIntoView({ behavior: "smooth", block: "end" });
+}
+
+// ── Send a query ──────────────────────────────────────────────────────────────
+async function sendMessage() {
+  if (busy) return;
+  const input = document.getElementById("input");
+  const query = input.value.trim();
+  if (!query) return;
+
+  input.value = "";
+  autoResize(input);
+  setBusy(true);
+
+  addMessage("user", "You", query);
+  queryCount++;
+  document.getElementById("siQueries").textContent = queryCount;
+
+  const botId = startBotMessage();
+
+  try {
+    const response = await fetch(`${SERVER}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query })
+    });
+
+    const reader  = response.body.getReader();
+    const decoder = new TextDecoder();
+    let   buffer  = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split("\n");
+      buffer      = lines.pop();        // keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (line.startsWith("event: ")) {
+          // skip — we read event from next data: line's context
+        } else if (line.startsWith("data: ")) {
+          // We need to know the event type — re-parse the SSE chunk properly
+        }
+      }
+
+      // Re-parse full SSE events properly
+      const chunks = buffer === "" ? lines.join("\n") + "\n" : lines.join("\n") + "\n" + buffer;
+      buffer = "";   // we'll rebuild
+      parseSSE(chunks, botId);
+    }
+
+  } catch (e) {
+    setAnswer(botId, `⚠ Error: ${e.message}`);
+  } finally {
+    setBusy(false);
+  }
+}
+
+// Proper SSE parser
+let _sseEvent = "", _sseData = "";
+function parseSSE(raw, botId) {
+  const lines = raw.split("\n");
+  for (const line of lines) {
+    if (line.startsWith("event: ")) {
+      _sseEvent = line.slice(7).trim();
+    } else if (line.startsWith("data: ")) {
+      _sseData = line.slice(6).trim();
+      if (_sseEvent && _sseData) {
+        handleSSEEvent(_sseEvent, _sseData, botId);
+        _sseEvent = ""; _sseData = "";
+      }
+    } else if (line === "") {
+      _sseEvent = ""; _sseData = "";
+    }
+  }
+}
+
+function handleSSEEvent(event, data, botId) {
+  try {
+    const val = JSON.parse(data);
+    if (event === "log")    appendLog(botId, val);
+    if (event === "answer") setAnswer(botId, val);
+    if (event === "error")  setAnswer(botId, `⚠ Error: ${val}`);
+  } catch {}
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function setBusy(state) {
+  busy = state;
+  document.getElementById("sendBtn").disabled = state;
+  document.getElementById("statusDot").className = state ? "status-dot busy" : "status-dot live";
+}
+
+function clearChat() {
+  document.getElementById("messages").innerHTML = `
+    <div class="welcome" id="welcome">
+      <div class="welcome-icon">🤖</div>
+      <div class="welcome-text">GitHub Repo Assistant</div>
+      <div class="welcome-sub">Ask anything about FastAPI.<br>Try a suggestion from the sidebar →</div>
+    </div>`;
+  msgCount   = 0;
+  queryCount = 0;
+  document.getElementById("siMsgs").textContent   = "0";
+  document.getElementById("siQueries").textContent = "0";
+}
+
+function handleKey(e) {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+function autoResize(el) {
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 120) + "px";
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// Minimal markdown-ish renderer: code blocks, inline code, bold
+function renderText(text) {
+  let s = escHtml(text);
+  // fenced code blocks
+  s = s.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) =>
+    `<pre><code>${code.trim()}</code></pre>`);
+  // inline code
+  s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+  // bold
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  // newlines
+  s = s.replace(/\n/g, "<br>");
+  return s;
+}
+
+init();
+</script>
+</body>
+</html>
